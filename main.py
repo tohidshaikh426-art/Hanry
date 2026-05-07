@@ -9,6 +9,9 @@ import spacy
 import datetime
 import wikipediaapi
 import json
+import vosk
+import wave
+import pyaudio
 
 # Load spaCy model for NLP
 nlp = spacy.load("en_core_web_sm")
@@ -21,7 +24,10 @@ engine.setProperty('rate', 150)  # Speed of speech
 openai.api_key = os.getenv('OPENAI_API_KEY')
 
 # Wikipedia API
-wiki_wiki = wikipediaapi.Wikipedia('en')
+wiki_wiki = wikipediaapi.Wikipedia(user_agent='HanryVoiceAssistant/1.0 (https://github.com/tohidshaikh426-art/Hanry)', language='en')
+
+# Vosk model for offline recognition
+vosk_model = vosk.Model("models/vosk-model-small-en-us-0.15")
 
 # Memory file
 MEMORY_FILE = 'assistant_memory.json'
@@ -43,17 +49,64 @@ def speak(text):
     engine.say(text)
     engine.runAndWait()
 
-def listen():
+def test_microphone():
+    """Test microphone functionality"""
+    speak("Testing microphone. Please say something.")
     recognizer = sr.Recognizer()
     with sr.Microphone() as source:
-        print("Listening...")
-        audio = recognizer.listen(source)
+        recognizer.adjust_for_ambient_noise(source, duration=1)
         try:
+            audio = recognizer.listen(source, timeout=5)
+            command = recognizer.recognize_google(audio).lower()
+            speak(f"I heard: {command}")
+            return True
+        except Exception as e:
+            speak(f"Microphone test failed: {str(e)}")
+            return False
+
+def listen():
+    # Try offline recognition first with Vosk
+    try:
+        recognizer = vosk.KaldiRecognizer(vosk_model, 16000)
+        p = pyaudio.PyAudio()
+        stream = p.open(format=pyaudio.paInt16, channels=1, rate=16000, input=True, frames_per_buffer=8192)
+        stream.start_stream()
+        
+        print("Listening (offline)...")
+        while True:
+            data = stream.read(4096, exception_on_overflow=False)
+            if recognizer.AcceptWaveform(data):
+                result = json.loads(recognizer.Result())
+                text = result.get("text", "").lower()
+                if text:
+                    print(f"You said: {text}")
+                    stream.stop_stream()
+                    stream.close()
+                    p.terminate()
+                    return text
+    except Exception as e:
+        print(f"Offline recognition failed: {e}")
+    
+    # Fallback to Google Speech Recognition
+    print("Falling back to online recognition...")
+    recognizer = sr.Recognizer()
+    with sr.Microphone() as source:
+        print("Listening (online)...")
+        # Adjust for ambient noise
+        recognizer.adjust_for_ambient_noise(source, duration=1)
+        # Set energy threshold
+        recognizer.energy_threshold = 300
+        try:
+            # Listen with timeout
+            audio = recognizer.listen(source, timeout=5, phrase_time_limit=5)
             command = recognizer.recognize_google(audio).lower()
             print(f"You said: {command}")
             return command
+        except sr.WaitTimeoutError:
+            print("Listening timed out.")
+            return ""
         except sr.UnknownValueError:
-            speak("Sorry, I didn't catch that.")
+            speak("Sorry, I didn't catch that. Please speak clearly.")
             return ""
         except sr.RequestError:
             speak("Sorry, speech service is down.")
@@ -82,6 +135,8 @@ def classify_intent(command):
         return "weather"
     elif "wikipedia" in command or "wiki" in command:
         return "wikipedia"
+    elif "test" in command and ("microphone" in command or "mic" in command):
+        return "test_microphone"
     elif "exit" in command or "quit" in command:
         return "exit"
     else:
@@ -149,6 +204,8 @@ def execute_command(command):
         query = command.replace("wikipedia", "").replace("wiki", "").strip()
         info = search_wikipedia(query)
         speak(info)
+    elif intent == "test_microphone" or "test mic" in command:
+        test_microphone()
     elif intent == "exit":
         speak("Goodbye!")
         return False

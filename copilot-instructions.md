@@ -14,7 +14,7 @@ This workspace contains an advanced Python-based AI voice assistant project name
 - `assistant_memory.json`: User memory file (created at runtime)
 
 ## Key Components
-- **Speech Recognition**: Uses `speech_recognition` with Google Speech API
+- **Speech Recognition**: Online (Google) + Offline (Vosk) for better reliability
 - **Text-to-Speech**: Uses `pyttsx3` for voice output
 - **Natural Language Processing**: Uses `spaCy` for intent classification
 - **AI Conversation**: Uses `OpenAI GPT-3.5` for general responses

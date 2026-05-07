@@ -7,3 +7,4 @@ openai
 spacy
 datetime
 wikipedia-api
+vosk

@@ -3,7 +3,7 @@
 A Python-based AI voice assistant named Hanry, designed to run on your laptop with full system access. It responds only to your wake word "Hey Hanry" and can execute various commands.
 
 ## Features
-- Speech recognition and text-to-speech
+- Speech recognition and text-to-speech (online + offline)
 - Wake word detection ("Hey Hanry" or "Hanry")
 - Advanced natural language processing with spaCy
 - AI-powered conversational responses using OpenAI GPT
@@ -11,13 +11,15 @@ A Python-based AI voice assistant named Hanry, designed to run on your laptop wi
 - Time and weather information
 - Wikipedia search
 - User memory persistence
+- Offline speech recognition with Vosk
 - User authentication via wake word (expandable to voice recognition)
 
 ## Setup
 1. Install dependencies: `pip install -r requirements.txt`
 2. Download spaCy model: `python -m spacy download en_core_web_sm`
-3. Set OpenAI API key: Set environment variable `OPENAI_API_KEY` or edit `main.py`
-4. Run the assistant: `python main.py`
+3. Download Vosk model: Run the download commands in the script or manually download from https://alphacephei.com/vosk/models/
+4. Set OpenAI API key: Set environment variable `OPENAI_API_KEY` or edit `main.py`
+5. Run the assistant: `python main.py`
 
 ## New Advanced Features
 - **Conversational AI**: Uses OpenAI GPT-3.5 for general queries and responses
