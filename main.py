@@ -10,8 +10,8 @@ import datetime
 import wikipediaapi
 import json
 import vosk
-import wave
 import pyaudio
+import time
 
 # Load spaCy model for NLP
 nlp = spacy.load("en_core_web_sm")
@@ -19,6 +19,11 @@ nlp = spacy.load("en_core_web_sm")
 # Initialize text-to-speech engine
 engine = pyttsx3.init()
 engine.setProperty('rate', 150)  # Speed of speech
+voices = engine.getProperty('voices')
+for voice in voices:
+    if 'english' in voice.name.lower() or 'male' in voice.name.lower():
+        engine.setProperty('voice', voice.id)
+        break
 
 # OpenAI API key (set your key here or use environment variable)
 openai.api_key = os.getenv('OPENAI_API_KEY')
@@ -43,6 +48,8 @@ def save_memory(memory):
         json.dump(memory, f)
 
 memory = load_memory()
+chat_history = []
+MAX_HISTORY = 8
 
 def speak(text):
     print(f"Hanry: {text}")
@@ -64,65 +71,57 @@ def test_microphone():
             speak(f"Microphone test failed: {str(e)}")
             return False
 
-def listen():
-    # Try offline recognition first with Vosk
+
+def recognize_offline(audio):
     try:
+        raw_data = audio.get_raw_data(convert_rate=16000, convert_width=2)
         recognizer = vosk.KaldiRecognizer(vosk_model, 16000)
-        p = pyaudio.PyAudio()
-        stream = p.open(format=pyaudio.paInt16, channels=1, rate=16000, input=True, frames_per_buffer=8192)
-        stream.start_stream()
-        
-        print("Listening (offline)...")
-        while True:
-            data = stream.read(4096, exception_on_overflow=False)
-            if recognizer.AcceptWaveform(data):
-                result = json.loads(recognizer.Result())
-                text = result.get("text", "").lower()
-                if text:
-                    print(f"You said: {text}")
-                    stream.stop_stream()
-                    stream.close()
-                    p.terminate()
-                    return text
+        if recognizer.AcceptWaveform(raw_data):
+            result = json.loads(recognizer.Result())
+            return result.get("text", "").lower()
+        return json.loads(recognizer.FinalResult()).get("text", "").lower()
     except Exception as e:
-        print(f"Offline recognition failed: {e}")
-    
-    # Fallback to Google Speech Recognition
-    print("Falling back to online recognition...")
+        print(f"Offline recognition error: {e}")
+        return ""
+
+
+def listen():
     recognizer = sr.Recognizer()
+    recognizer.dynamic_energy_threshold = True
+    recognizer.pause_threshold = 0.8
+
     with sr.Microphone() as source:
-        print("Listening (online)...")
-        # Adjust for ambient noise
+        print("Listening...")
         recognizer.adjust_for_ambient_noise(source, duration=1)
-        # Set energy threshold
-        recognizer.energy_threshold = 300
         try:
-            # Listen with timeout
-            audio = recognizer.listen(source, timeout=5, phrase_time_limit=5)
-            command = recognizer.recognize_google(audio).lower()
-            print(f"You said: {command}")
-            return command
+            audio = recognizer.listen(source, timeout=6, phrase_time_limit=6)
         except sr.WaitTimeoutError:
-            print("Listening timed out.")
-            return ""
-        except sr.UnknownValueError:
-            speak("Sorry, I didn't catch that. Please speak clearly.")
-            return ""
-        except sr.RequestError:
-            speak("Sorry, speech service is down.")
+            print("Listening timeout during capture.")
             return ""
 
-def wake_word_detected(command):
-    return "hello" in command
+    # Try offline recognition first
+    text = recognize_offline(audio)
+    if text:
+        print(f"Offline recognized: {text}")
+        return text
 
-def authenticate_user():
-    # Basic authentication: for now, just check wake word
-    # For advanced: implement voiceprint recognition (requires additional setup)
-    speak("Voice authenticated. How can I help?")
-    return True
+    print("Offline recognition returned nothing, trying online...")
+    try:
+        text = recognizer.recognize_google(audio).lower()
+        print(f"Online recognized: {text}")
+        return text
+    except sr.UnknownValueError:
+        speak("Sorry, I didn't catch that. Please speak clearly.")
+        return ""
+    except sr.RequestError:
+        speak("Sorry, speech service is down.")
+        return ""
+    except Exception as e:
+        print(f"Online recognition error: {e}")
+        return ""
+
 
 def classify_intent(command):
-    doc = nlp(command)
     if "open" in command:
         return "open_app"
     elif "search" in command or "google" in command:
@@ -141,6 +140,7 @@ def classify_intent(command):
         return "exit"
     else:
         return "general"
+
 
 def get_time():
     now = datetime.datetime.now()
@@ -163,51 +163,69 @@ def search_wikipedia(query):
 
 def ai_response(command):
     try:
+        system_prompt = (
+            "You are Hanry, a highly intelligent AI assistant inspired by JARVIS. "
+            "Speak with calm confidence, natural language, and a respectful tone. "
+            "Address the user as 'Sir' and keep answers concise yet conversational. "
+            "Use human-like phrasing, maintain polite formality, and make your responses feel smooth and friendly."
+        )
+        messages = [{"role": "system", "content": system_prompt}]
+        messages.extend(chat_history[-MAX_HISTORY:])
+        messages.append({"role": "user", "content": command})
+
         response = openai.ChatCompletion.create(
             model="gpt-3.5-turbo",
-            messages=[
-                {"role": "system", "content": "You are Hanry, an advanced AI assistant. Respond helpfully and concisely."},
-                {"role": "user", "content": command}
-            ],
-            max_tokens=150
+            messages=messages,
+            max_tokens=200,
+            temperature=0.8,
+            top_p=0.9
         )
-        return response.choices[0].message.content.strip()
-    except:
-        return "I'm sorry, I couldn't process that request."
+        assistant_text = response.choices[0].message.content.strip()
+        chat_history.append({"role": "user", "content": command})
+        chat_history.append({"role": "assistant", "content": assistant_text})
+        return assistant_text
+    except Exception as e:
+        print(f"AI response error: {e}")
+        return "I apologize, Sir. I couldn't process that request right now."
 
 def execute_command(command):
     intent = classify_intent(command)
     if intent == "open_app":
         app = command.replace("open", "").strip()
         try:
-            subprocess.run(["start", app], shell=True)  # Windows
-            speak(f"Opening {app}")
-        except:
-            speak("Could not open that application.")
+            if os.path.exists(app):
+                os.startfile(app)
+            else:
+                subprocess.run(["cmd", "/c", "start", "", app], shell=True)
+            speak(f"Opening {app} for you, Sir.")
+        except Exception as e:
+            print(f"Open app failed: {e}")
+            speak("I couldn't open that application. Please check the name and try again.")
     elif intent == "search_web":
         query = command.replace("search", "").replace("google", "").strip()
         url = f"https://www.google.com/search?q={query}"
         pyautogui.hotkey('ctrl', 't')  # Open new tab
         pyautogui.typewrite(url)
         pyautogui.press('enter')
-        speak(f"Searching for {query}")
+        speak(f"Right away, Sir. Searching for {query}.")
     elif intent == "shutdown":
-        speak("Shutting down the system.")
+        speak("I will shut down the system now. Please save your work, Sir.")
         os.system("shutdown /s /t 1")  # Windows shutdown
     elif intent == "time":
         time_str = get_time()
-        speak(time_str)
+        speak(f"Certainly, Sir. {time_str}")
     elif intent == "weather":
         weather = get_weather()
-        speak(weather)
+        speak(f"Here is the current weather, Sir: {weather}")
     elif intent == "wikipedia":
         query = command.replace("wikipedia", "").replace("wiki", "").strip()
         info = search_wikipedia(query)
-        speak(info)
+        speak(f"I found this information, Sir: {info}")
     elif intent == "test_microphone" or "test mic" in command:
+        speak("Testing the microphone now, Sir.")
         test_microphone()
     elif intent == "exit":
-        speak("Goodbye!")
+        speak("Very well, Sir. I am signing off.")
         return False
     else:
         # Use AI for general queries
@@ -215,16 +233,31 @@ def execute_command(command):
         speak(response)
     return True
 
+
+def wake_word_detected(command):
+    return "hello" in command.lower()
+
+
+def authenticate_user():
+    # Basic authentication: for now, just check wake word
+    # For advanced: implement voiceprint recognition (requires additional setup)
+    speak("Yes, Sir. Hanry at your service. How may I assist you today?")
+    return True
+
+
 def main():
     speak("Voice assistant initialized. Say 'hello' to wake me up.")
-    while True:
-        command = listen()
-        if wake_word_detected(command):
-            if authenticate_user():
-                while True:
-                    command = listen()
-                    if not execute_command(command):
-                        break
+    try:
+        while True:
+            command = listen()
+            if wake_word_detected(command):
+                if authenticate_user():
+                    while True:
+                        command = listen()
+                        if not execute_command(command):
+                            break
+    except KeyboardInterrupt:
+        speak("Shutting down gracefully. Goodbye.")
 
 if __name__ == "__main__":
     main()
