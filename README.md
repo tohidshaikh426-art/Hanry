@@ -1,10 +1,10 @@
 # Voice Assistant
 
-A Python-based AI voice assistant named Hanry, designed to run on your laptop with full system access. It responds only to your wake word "Hey Hanry" and can execute various commands.
+A Python-based AI voice assistant named Hanry, designed to run on your laptop with full system access. It responds only to your wake word "hello" and can execute various commands.
 
 ## Features
 - Speech recognition and text-to-speech (online + offline)
-- Wake word detection ("Hey Hanry" or "Hanry")
+- Wake word detection ("hello")
 - Advanced natural language processing with spaCy
 - AI-powered conversational responses using OpenAI GPT
 - System commands (open apps, search web, shutdown)

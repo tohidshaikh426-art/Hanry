@@ -113,7 +113,7 @@ def listen():
             return ""
 
 def wake_word_detected(command):
-    return "hey hanry" in command or "hanry" in command
+    return "hello" in command
 
 def authenticate_user():
     # Basic authentication: for now, just check wake word
@@ -216,7 +216,7 @@ def execute_command(command):
     return True
 
 def main():
-    speak("Voice assistant initialized. Say 'Hey Hanry' to wake me up.")
+    speak("Voice assistant initialized. Say 'hello' to wake me up.")
     while True:
         command = listen()
         if wake_word_detected(command):

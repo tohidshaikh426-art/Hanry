@@ -4,7 +4,7 @@ description: "Advanced Voice Assistant project: Python-based AI voice assistant 
 
 # Voice Assistant Project Overview
 
-This workspace contains an advanced Python-based AI voice assistant project named Hanry. The assistant runs on a laptop with full system access and responds to wake words "Hey Hanry" or "Hanry".
+This workspace contains an advanced Python-based AI voice assistant project named Hanry. The assistant runs on a laptop with full system access and responds to the wake word "hello".
 
 ## Project Structure
 - `main.py`: Main script with advanced voice assistant logic
@@ -18,7 +18,7 @@ This workspace contains an advanced Python-based AI voice assistant project name
 - **Text-to-Speech**: Uses `pyttsx3` for voice output
 - **Natural Language Processing**: Uses `spaCy` for intent classification
 - **AI Conversation**: Uses `OpenAI GPT-3.5` for general responses
-- **Wake Word Detection**: Responds to "hey hanry" or "hanry"
+- **Wake Word Detection**: Responds to "hello"
 - **Command Execution**: System commands, web search, time/weather/Wikipedia
 - **Memory System**: JSON-based user preference storage
 - **System Integration**: `pyautogui` for shortcuts, `subprocess` for apps
